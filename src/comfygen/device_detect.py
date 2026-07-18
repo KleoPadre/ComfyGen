@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import platform
 import subprocess
+from typing import Protocol
 
 import psutil
 
 from comfygen.config import DEFAULT_APPLE_UNIFIED_MEMORY_FACTOR
 from comfygen.models import DeviceInfo
+
+
+class SupportsSystemStats(Protocol):
+    def health_check(self, timeout: float = ...) -> bool: ...
+    def system_stats(self) -> dict: ...
 
 
 class UnsupportedPlatformError(RuntimeError):
@@ -59,3 +65,27 @@ def _query_nvidia_smi_vram() -> int | None:
         return None
     first_line = result.stdout.strip().splitlines()[0]
     return int(first_line.strip()) * 1024 * 1024
+
+
+def detect_via_api(client: SupportsSystemStats) -> DeviceInfo:
+    stats = client.system_stats()
+    devices = stats.get("devices") or []
+    if not devices:
+        raise DeviceDetectionError("ComfyUI /system_stats вернул пустой список устройств")
+    device = devices[0]
+    return DeviceInfo(
+        available_vram_bytes=int(device.get("vram_total", 0)),
+        device_type=device.get("type", "unknown"),
+        source="api",
+    )
+
+
+def detect_hybrid(
+    client: SupportsSystemStats,
+    apple_unified_memory_factor: float = DEFAULT_APPLE_UNIFIED_MEMORY_FACTOR,
+) -> DeviceInfo:
+    if client.health_check():
+        info = detect_via_api(client)
+        return DeviceInfo(info.available_vram_bytes, info.device_type, source="hybrid-api")
+    info = detect_via_os(apple_unified_memory_factor)
+    return DeviceInfo(info.available_vram_bytes, info.device_type, source="hybrid-os")
