@@ -97,6 +97,12 @@ def test_load_cached_index_expired_returns_none(tmp_path):
     assert load_cached_index(cache_path, ttl_seconds=3600) is None
 
 
+def test_load_cached_index_corrupted_json_returns_none(tmp_path):
+    cache_path = tmp_path / "cache.json"
+    cache_path.write_text("not valid json{", encoding="utf-8")
+    assert load_cached_index(cache_path, ttl_seconds=3600) is None
+
+
 @respx.mock
 def test_get_index_uses_cache_when_fresh(tmp_path):
     cache_path = tmp_path / "cache.json"

@@ -84,20 +84,28 @@ def run(force_refresh: bool = False) -> None:
             return
 
     prompt_text = ui.ask_prompt()
-    set_positive_prompt(workflow, prompt_text)
+    if not set_positive_prompt(workflow, prompt_text):
+        console.print(
+            "[yellow]Не удалось автоматически подставить промпт в этот шаблон — "
+            "впишите его вручную в узле CLIP/текстового энкодера прямо в ComfyUI.[/yellow]"
+        )
 
     if ui.ask_extra_params_wanted():
         negative = ui.ask_negative_prompt()
         if negative:
-            set_negative_prompt(workflow, negative)
+            if not set_negative_prompt(workflow, negative):
+                console.print("[yellow]Не удалось применить negative prompt — узел не найден в этом шаблоне.[/yellow]")
         resolution = ui.ask_resolution()
         if resolution:
-            set_resolution(workflow, *resolution)
+            if not set_resolution(workflow, *resolution):
+                console.print("[yellow]Не удалось применить разрешение — узел не найден в этом шаблоне.[/yellow]")
         seed, steps = ui.ask_seed_and_steps()
         if seed is not None:
-            set_seed(workflow, seed)
+            if not set_seed(workflow, seed):
+                console.print("[yellow]Не удалось применить seed — узел не найден в этом шаблоне.[/yellow]")
         if steps is not None:
-            set_steps(workflow, steps)
+            if not set_steps(workflow, steps):
+                console.print("[yellow]Не удалось применить количество шагов — узел не найден в этом шаблоне.[/yellow]")
 
     if gen_type.value in ("video", "animate_photo"):
         image_path = ui.ask_image_input_choice()

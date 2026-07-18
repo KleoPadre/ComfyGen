@@ -96,7 +96,10 @@ def choose_template(tiers: dict[VramTier, list[Template]], include_unknown: bool
     if include_unknown:
         candidates += tiers.get(VramTier.UNKNOWN, [])
     if not candidates:
-        console.print("[red]Ни один шаблон не подходит под характеристики устройства.[/red]")
+        console.print(
+            "[red]Ни один шаблон не подходит под характеристики устройства для выбранного типа генерации. "
+            "Попробуйте выбрать другой тип генерации или способ детекции устройства.[/red]"
+        )
         return None
     choice = questionary.select(
         "Выберите модель/шаблон",

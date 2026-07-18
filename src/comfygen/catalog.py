@@ -32,7 +32,10 @@ def load_cached_index(cache_path: Path, ttl_seconds: int) -> list[dict] | None:
     age = time.time() - cache_path.stat().st_mtime
     if age > ttl_seconds:
         return None
-    return json.loads(cache_path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(cache_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
 
 
 def save_cache(cache_path: Path, raw_index: list[dict]) -> None:
