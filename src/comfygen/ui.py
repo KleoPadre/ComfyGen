@@ -10,6 +10,19 @@ from comfygen.models import DeviceInfo, GenerationType, Template, VramTier
 
 console = Console()
 
+
+def _ask_int(message: str, default: str) -> int | None:
+    """Безопасно запросить целое число, обрабатывая Ctrl+C и нечисловой ввод."""
+    value = questionary.text(message, default=default).ask()
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        console.print(f"[red]«{value}» — не число, значение пропущено.[/red]")
+        return None
+
+
 GENERATION_TYPE_LABELS = {
     GenerationType.PHOTO: "Фото (текст → изображение)",
     GenerationType.VIDEO: "Видео (текст/изображение → видео)",
@@ -108,8 +121,12 @@ def ask_negative_prompt() -> str | None:
 def ask_resolution() -> tuple[int, int] | None:
     if not questionary.confirm("Задать разрешение вручную?", default=False).ask():
         return None
-    width = int(questionary.text("Ширина:", default="1024").ask())
-    height = int(questionary.text("Высота:", default="1024").ask())
+    width = _ask_int("Ширина:", "1024")
+    if width is None:
+        return None
+    height = _ask_int("Высота:", "1024")
+    if height is None:
+        return None
     return width, height
 
 
@@ -117,9 +134,9 @@ def ask_seed_and_steps() -> tuple[int | None, int | None]:
     seed = None
     steps = None
     if questionary.confirm("Задать seed вручную?", default=False).ask():
-        seed = int(questionary.text("Seed:", default="0").ask())
+        seed = _ask_int("Seed:", "0")
     if questionary.confirm("Задать количество шагов вручную?", default=False).ask():
-        steps = int(questionary.text("Шаги:", default="20").ask())
+        steps = _ask_int("Шаги:", "20")
     return seed, steps
 
 
