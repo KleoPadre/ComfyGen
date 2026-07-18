@@ -39,7 +39,10 @@ def set_positive_prompt(workflow: dict, text: str) -> bool:
     nodes = _find_nodes_by_type(workflow, POSITIVE_PROMPT_NODE_TYPES)
     if not nodes:
         return False
-    nodes[0]["widgets_values"][0] = text
+    widgets_values = nodes[0].get("widgets_values") or []
+    if len(widgets_values) < 1:
+        return False
+    widgets_values[0] = text
     return True
 
 
@@ -47,7 +50,10 @@ def set_negative_prompt(workflow: dict, text: str) -> bool:
     nodes = _find_nodes_by_type(workflow, POSITIVE_PROMPT_NODE_TYPES)
     if len(nodes) < 2:
         return False
-    nodes[1]["widgets_values"][0] = text
+    widgets_values = nodes[1].get("widgets_values") or []
+    if len(widgets_values) < 1:
+        return False
+    widgets_values[0] = text
     return True
 
 

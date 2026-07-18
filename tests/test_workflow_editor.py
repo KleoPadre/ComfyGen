@@ -120,3 +120,22 @@ def test_set_image_input_patches_load_image_node():
 def test_set_image_input_returns_false_when_no_load_image_node():
     workflow = {"nodes": [], "definitions": {"subgraphs": []}}
     assert set_image_input(workflow, "uploaded_photo.png") is False
+
+
+def test_set_positive_prompt_returns_false_when_widgets_values_too_short():
+    workflow = {
+        "nodes": [{"id": 1, "type": "CLIPTextEncode", "widgets_values": []}],
+        "definitions": {"subgraphs": []},
+    }
+    assert set_positive_prompt(workflow, "hello") is False
+
+
+def test_set_negative_prompt_returns_false_when_widgets_values_too_short():
+    workflow = {
+        "nodes": [
+            {"id": 1, "type": "CLIPTextEncode", "widgets_values": ["positive"]},
+            {"id": 2, "type": "CLIPTextEncode", "widgets_values": []},
+        ],
+        "definitions": {"subgraphs": []},
+    }
+    assert set_negative_prompt(workflow, "blurry") is False
