@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
 
 import httpx
 from rich.console import Console
@@ -106,7 +105,14 @@ def run(force_refresh: bool = False) -> None:
             if not client.health_check():
                 console.print("[red]ComfyUI не запущен — не могу загрузить изображение. Запустите ComfyUI и повторите.[/red]")
                 return
-            uploaded_name = client.upload_image(image_path)
+            try:
+                uploaded_name = client.upload_image(image_path)
+            except (FileNotFoundError, OSError) as exc:
+                console.print(f"[red]Не удалось прочитать файл изображения: {exc}[/red]")
+                return
+            except httpx.HTTPError as exc:
+                console.print(f"[red]Не удалось загрузить изображение в ComfyUI: {exc}[/red]")
+                return
             set_image_input(workflow, uploaded_name)
 
     if not client.health_check():
@@ -114,7 +120,14 @@ def run(force_refresh: bool = False) -> None:
         return
 
     output_filename = f"comfygen_{template.name}.json"
-    client.save_workflow(output_filename, workflow)
+    try:
+        client.save_workflow(output_filename, workflow)
+    except httpx.HTTPError as exc:
+        console.print(
+            f"[red]Не удалось сохранить workflow в ComfyUI: {exc}. "
+            "Убедитесь, что ComfyUI запущен, и повторите.[/red]"
+        )
+        return
     console.print(f"[green]Готово! Workflow сохранён в ComfyUI как \"{output_filename}\" — откройте его на вкладке Workflows и нажмите Queue.[/green]")
 
 
