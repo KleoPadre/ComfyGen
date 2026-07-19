@@ -143,6 +143,78 @@ def test_set_negative_prompt_returns_false_when_widgets_values_too_short():
     assert set_negative_prompt(workflow, "blurry") is False
 
 
+# Структура, воспроизводящая реальный баг: у sdxl_simple_example (base+refiner)
+# порядок узлов в файле НЕ совпадает с их ролью в графе связей — node 7 идёт в
+# файле раньше node 6, но по факту именно node 6 подключён как "positive" к
+# сэмплеру 10, а node 7 — как "negative". Наивный подход "первый найденный
+# CLIPTextEncode = positive" подставлял бы промпт пользователя в негатив.
+SDXL_BASE_REFINER_WORKFLOW = {
+    "nodes": [
+        {"id": 7, "type": "CLIPTextEncode", "widgets_values": ["original base text (node 7)"]},
+        {"id": 6, "type": "CLIPTextEncode", "widgets_values": ["original base text (node 6)"]},
+        {"id": 16, "type": "CLIPTextEncode", "widgets_values": ["text, watermark"]},
+        {"id": 15, "type": "CLIPTextEncode", "widgets_values": ["original refiner text (node 15)"]},
+        {
+            "id": 10,
+            "type": "KSamplerAdvanced",
+            "inputs": [
+                {"name": "model", "type": "MODEL", "link": 10},
+                {"name": "positive", "type": "CONDITIONING", "link": 11},
+                {"name": "negative", "type": "CONDITIONING", "link": 12},
+            ],
+            "widgets_values": [],
+        },
+        {
+            "id": 11,
+            "type": "KSamplerAdvanced",
+            "inputs": [
+                {"name": "model", "type": "MODEL", "link": 14},
+                {"name": "positive", "type": "CONDITIONING", "link": 23},
+                {"name": "negative", "type": "CONDITIONING", "link": 24},
+            ],
+            "widgets_values": [],
+        },
+    ],
+    "links": [
+        [11, 6, 0, 10, 1, "CONDITIONING"],
+        [12, 7, 0, 10, 2, "CONDITIONING"],
+        [23, 15, 0, 11, 1, "CONDITIONING"],
+        [24, 16, 0, 11, 2, "CONDITIONING"],
+    ],
+    "definitions": {"subgraphs": []},
+}
+
+
+def test_set_positive_prompt_uses_link_graph_not_file_order():
+    workflow = copy.deepcopy(SDXL_BASE_REFINER_WORKFLOW)
+    assert set_positive_prompt(workflow, "new prompt") is True
+    by_id = {n["id"]: n for n in workflow["nodes"]}
+    # node 6 подключён как positive у сэмплера 10 -> должен получить промпт
+    assert by_id[6]["widgets_values"][0] == "new prompt"
+    # node 7 подключён как negative -> не должен быть тронут set_positive_prompt
+    assert by_id[7]["widgets_values"][0] == "original base text (node 7)"
+
+
+def test_set_positive_prompt_patches_all_stages_of_multi_sampler_pipeline():
+    workflow = copy.deepcopy(SDXL_BASE_REFINER_WORKFLOW)
+    assert set_positive_prompt(workflow, "new prompt") is True
+    by_id = {n["id"]: n for n in workflow["nodes"]}
+    # и base (node 6), и refiner (node 15) positive-узлы должны обновиться
+    assert by_id[6]["widgets_values"][0] == "new prompt"
+    assert by_id[15]["widgets_values"][0] == "new prompt"
+
+
+def test_set_negative_prompt_uses_link_graph_not_file_order():
+    workflow = copy.deepcopy(SDXL_BASE_REFINER_WORKFLOW)
+    assert set_negative_prompt(workflow, "bad hands") is True
+    by_id = {n["id"]: n for n in workflow["nodes"]}
+    assert by_id[7]["widgets_values"][0] == "bad hands"
+    assert by_id[16]["widgets_values"][0] == "bad hands"
+    # positive-узлы не должны быть тронуты set_negative_prompt
+    assert by_id[6]["widgets_values"][0] == "original base text (node 6)"
+    assert by_id[15]["widgets_values"][0] == "original refiner text (node 15)"
+
+
 WAN_TEXT_TO_IMAGE_API_INFO = {
     "input": {
         "required": {
