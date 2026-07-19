@@ -23,13 +23,6 @@ LATENT_SIZE_NODE_TYPES = {
 SAMPLER_NODE_TYPES = {"KSampler"}
 IMAGE_INPUT_NODE_TYPES = {"LoadImage"}
 
-# Типы узлов-потребителей CONDITIONING (сэмплеры), чьи именованные входы
-# "positive"/"negative" однозначно определяют роль подключённого к ним
-# текстового узла — используется ТОЛЬКО для разрешения роли по графу связей
-# (см. _resolve_conditioning_sources), не для set_seed/set_steps: у разных
-# типов сэмплеров разный порядок виджетов, здесь это не нужно.
-CONDITIONING_CONSUMER_NODE_TYPES = {"KSampler", "KSamplerAdvanced"}
-
 
 def load_workflow_file(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -69,20 +62,25 @@ def _build_link_origin_map(links: list) -> dict[int, int]:
 
 
 def _resolve_conditioning_sources(workflow: dict, input_name: str) -> list[dict]:
-    """Найти узлы, реально подключённые как ``positive``/``negative`` к
-    сэмплерам — по графу связей, а не по порядку узлов в файле. Порядок
-    узлов в JSON никак не гарантирует, что "первый найденный текстовый
-    узел" — это positive: у многоступенчатых пайплайнов (например
-    base+refiner у SDXL) узлов больше двух, и их порядок в файле может не
-    совпадать с их ролью в графе."""
+    """Найти узлы, реально подключённые как ``positive``/``negative`` —
+    по графу связей, а не по порядку узлов в файле. Порядок узлов в JSON
+    никак не гарантирует, что "первый найденный текстовый узел" — это
+    positive: у многоступенчатых пайплайнов (например base+refiner у SDXL)
+    узлов больше двух, и их порядок в файле может не совпадать с их ролью
+    в графе.
+
+    Не ограничиваемся конкретными типами узлов-потребителей (KSampler,
+    KSamplerAdvanced, SamplerCustom, ...) — таких типов сэмплеров в
+    экосистеме ComfyUI много и появляются новые, а именование входов
+    "positive"/"negative" для CONDITIONING — устойчивая конвенция,
+    одинаковая для всех них. Ищем по имени и типу входа у ЛЮБОГО узла.
+    """
     resolved: list[dict] = []
     seen_ids: set[int] = set()
     for nodes, links in _iter_scopes(workflow):
         nodes_by_id = {n.get("id"): n for n in nodes}
         link_origin = _build_link_origin_map(links)
         for node in nodes:
-            if node.get("type") not in CONDITIONING_CONSUMER_NODE_TYPES:
-                continue
             for inp in node.get("inputs", []):
                 if inp.get("name") != input_name or inp.get("type") != "CONDITIONING":
                     continue

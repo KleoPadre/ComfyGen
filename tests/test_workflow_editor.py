@@ -215,6 +215,48 @@ def test_set_negative_prompt_uses_link_graph_not_file_order():
     assert by_id[15]["widgets_values"][0] == "original refiner text (node 15)"
 
 
+# Реальный баг №2: SDXL Turbo использует SamplerCustom (не KSampler/
+# KSamplerAdvanced) — консюмер CONDITIONING может быть узлом ЛЮБОГО типа,
+# нельзя ограничиваться списком известных сэмплеров.
+SAMPLER_CUSTOM_WORKFLOW = {
+    "nodes": [
+        {"id": 7, "type": "CLIPTextEncode", "widgets_values": ["original negative (node 7)"]},
+        {"id": 6, "type": "CLIPTextEncode", "widgets_values": ["original positive (node 6)"]},
+        {
+            "id": 13,
+            "type": "SamplerCustom",
+            "inputs": [
+                {"name": "model", "type": "MODEL", "link": 41},
+                {"name": "positive", "type": "CONDITIONING", "link": 19},
+                {"name": "negative", "type": "CONDITIONING", "link": 20},
+            ],
+            "widgets_values": [],
+        },
+    ],
+    "links": [
+        [19, 6, 0, 13, 1, "CONDITIONING"],
+        [20, 7, 0, 13, 2, "CONDITIONING"],
+    ],
+    "definitions": {"subgraphs": []},
+}
+
+
+def test_set_positive_prompt_resolves_arbitrary_sampler_node_type():
+    workflow = copy.deepcopy(SAMPLER_CUSTOM_WORKFLOW)
+    assert set_positive_prompt(workflow, "new prompt") is True
+    by_id = {n["id"]: n for n in workflow["nodes"]}
+    assert by_id[6]["widgets_values"][0] == "new prompt"
+    assert by_id[7]["widgets_values"][0] == "original negative (node 7)"
+
+
+def test_set_negative_prompt_resolves_arbitrary_sampler_node_type():
+    workflow = copy.deepcopy(SAMPLER_CUSTOM_WORKFLOW)
+    assert set_negative_prompt(workflow, "bad hands") is True
+    by_id = {n["id"]: n for n in workflow["nodes"]}
+    assert by_id[7]["widgets_values"][0] == "bad hands"
+    assert by_id[6]["widgets_values"][0] == "original positive (node 6)"
+
+
 WAN_TEXT_TO_IMAGE_API_INFO = {
     "input": {
         "required": {
