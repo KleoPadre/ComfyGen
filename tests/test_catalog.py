@@ -25,6 +25,17 @@ SAMPLE_RAW_INDEX = [
                 "vram": 20830591386,
                 "size": 20830591386,
                 "description": "desc",
+                "openSource": True,
+            },
+            {
+                "name": "api_wan_text_to_image",
+                "title": "Wan2.5: Text to Image",
+                "tags": ["Text to Image", "Image", "API"],
+                "models": ["Wan2.5"],
+                "vram": 0,
+                "size": 0,
+                "description": "cloud API node, requires login and payment",
+                "openSource": False,
             },
         ],
     },
@@ -131,10 +142,11 @@ from comfygen.models import GenerationType
 
 def test_parse_templates_flattens_all_categories():
     templates = parse_templates(SAMPLE_RAW_INDEX)
-    assert len(templates) == 4
+    assert len(templates) == 5
     names = {t.name for t in templates}
     assert names == {
         "image_z_image_turbo",
+        "api_wan_text_to_image",
         "video_ltx2_3_i2v",
         "video_wan_t2v",
         "audio_ace_step",
@@ -144,10 +156,33 @@ def test_parse_templates_flattens_all_categories():
     assert audio_template.category == "audio"
 
 
+def test_parse_templates_reads_open_source_flag():
+    templates = parse_templates(SAMPLE_RAW_INDEX)
+    local_template = next(t for t in templates if t.name == "image_z_image_turbo")
+    cloud_template = next(t for t in templates if t.name == "api_wan_text_to_image")
+    assert local_template.open_source is True
+    assert cloud_template.open_source is False
+
+
+def test_parse_templates_defaults_open_source_true_when_field_missing():
+    templates = parse_templates(SAMPLE_RAW_INDEX)
+    audio_template = next(t for t in templates if t.name == "audio_ace_step")
+    assert audio_template.open_source is True
+
+
 def test_filter_by_generation_type_photo():
     templates = parse_templates(SAMPLE_RAW_INDEX)
     result = filter_by_generation_type(templates, GenerationType.PHOTO)
     assert [t.name for t in result] == ["image_z_image_turbo"]
+
+
+def test_filter_by_generation_type_excludes_cloud_api_templates():
+    """Шаблоны с openSource=false (облачные/платные API-ноды) не должны
+    предлагаться вообще, даже если категория и теги совпадают — они не
+    выполняются локально и требуют логина/оплаты."""
+    templates = parse_templates(SAMPLE_RAW_INDEX)
+    result = filter_by_generation_type(templates, GenerationType.PHOTO)
+    assert "api_wan_text_to_image" not in [t.name for t in result]
 
 
 def test_filter_by_generation_type_video_excludes_image_to_video():

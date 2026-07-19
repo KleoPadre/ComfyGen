@@ -28,6 +28,7 @@ class Template:
     vram_bytes: int | None = None
     size_bytes: int | None = None
     description: str = ""
+    open_source: bool = True
 
 
 @dataclass

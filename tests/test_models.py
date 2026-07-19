@@ -22,6 +22,12 @@ def test_template_construction():
     )
     assert t.name == "image_z_image_turbo"
     assert t.vram_bytes == 20830591386
+    assert t.open_source is True
+
+
+def test_template_open_source_can_be_false():
+    t = Template(name="api_x", title="API X", category="image", open_source=False)
+    assert t.open_source is False
 
 
 def test_device_info_construction():

@@ -73,12 +73,17 @@ def parse_templates(raw_index: list[dict]) -> list[Template]:
                     vram_bytes=t.get("vram"),
                     size_bytes=t.get("size"),
                     description=t.get("description", ""),
+                    open_source=bool(t.get("openSource", True)),
                 )
             )
     return templates
 
 
 def filter_by_generation_type(templates: list[Template], gen_type: GenerationType) -> list[Template]:
+    """Только локальные шаблоны (open_source) — облачные/платные API-ноды
+    (openSource: false в каталоге Comfy) никогда не предлагаются: они не
+    выполняются на устройстве пользователя и требуют логина/оплаты."""
+    templates = [t for t in templates if t.open_source]
     if gen_type == GenerationType.PHOTO:
         return [t for t in templates if t.category == "image" and "Text to Image" in t.tags]
     if gen_type == GenerationType.AUDIO:
