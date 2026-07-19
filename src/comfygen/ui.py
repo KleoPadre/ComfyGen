@@ -36,6 +36,31 @@ TIER_LABELS = {
     VramTier.UNKNOWN: "❓ Требования к VRAM неизвестны — на свой риск",
 }
 
+TIER_COLORS = {
+    VramTier.SAFE: "green",
+    VramTier.WARNING: "orange3",
+    VramTier.UNKNOWN: "red",
+}
+
+
+def _visible_tiers(include_unknown: bool) -> tuple[VramTier, ...]:
+    if include_unknown:
+        return (VramTier.SAFE, VramTier.WARNING, VramTier.UNKNOWN)
+    return (VramTier.SAFE, VramTier.WARNING)
+
+
+def _numbered_candidates(
+    tiers: dict[VramTier, list[Template]], include_unknown: bool
+) -> list[tuple[int, VramTier, Template]]:
+    """Единый порядок и нумерация, общие для таблицы и меню выбора."""
+    result: list[tuple[int, VramTier, Template]] = []
+    index = 1
+    for tier in _visible_tiers(include_unknown):
+        for template in tiers.get(tier, []):
+            result.append((index, tier, template))
+            index += 1
+    return result
+
 
 def choose_generation_type() -> GenerationType:
     choice = questionary.select(
@@ -70,13 +95,15 @@ def render_templates_table(tiers: dict[VramTier, list[Template]], include_unknow
     table.add_column("Название")
     table.add_column("Статус")
     table.add_column("VRAM")
-    row_index = 1
-    shown_tiers = (VramTier.SAFE, VramTier.WARNING, VramTier.UNKNOWN) if include_unknown else (VramTier.SAFE, VramTier.WARNING)
-    for tier in shown_tiers:
-        for template in tiers.get(tier, []):
-            vram_gb = f"{template.vram_bytes / 1024**3:.1f} GB" if template.vram_bytes else "—"
-            table.add_row(str(row_index), template.title, TIER_LABELS[tier], vram_gb)
-            row_index += 1
+    for index, tier, template in _numbered_candidates(tiers, include_unknown):
+        vram_gb = f"{template.vram_bytes / 1024**3:.1f} GB" if template.vram_bytes else "—"
+        color = TIER_COLORS[tier]
+        table.add_row(
+            f"[{color}]{index}[/{color}]",
+            f"[{color}]{template.title}[/{color}]",
+            f"[{color}]{TIER_LABELS[tier]}[/{color}]",
+            f"[{color}]{vram_gb}[/{color}]",
+        )
     console.print(table)
 
 
@@ -92,10 +119,8 @@ def ask_show_unknown_tier(count: int) -> bool:
 
 
 def choose_template(tiers: dict[VramTier, list[Template]], include_unknown: bool = False) -> Template | None:
-    candidates = tiers.get(VramTier.SAFE, []) + tiers.get(VramTier.WARNING, [])
-    if include_unknown:
-        candidates += tiers.get(VramTier.UNKNOWN, [])
-    if not candidates:
+    numbered = _numbered_candidates(tiers, include_unknown)
+    if not numbered:
         console.print(
             "[red]Ни один шаблон не подходит под характеристики устройства для выбранного типа генерации. "
             "Попробуйте выбрать другой тип генерации или способ детекции устройства.[/red]"
@@ -103,7 +128,10 @@ def choose_template(tiers: dict[VramTier, list[Template]], include_unknown: bool
         return None
     choice = questionary.select(
         "Выберите модель/шаблон",
-        choices=[questionary.Choice(title=t.title, value=t) for t in candidates],
+        choices=[
+            questionary.Choice(title=f"{index}. {template.title}", value=template)
+            for index, tier, template in numbered
+        ],
     ).ask()
     return choice
 
