@@ -87,15 +87,21 @@ def run(force_refresh: bool = False) -> None:
             console.print(f"[red]Не удалось загрузить файл шаблона {template.name}: {exc}[/red]")
             return
 
-    # Живая схема узла (/object_info) надёжнее статического списка типов — работает
-    # для любых узлов, включая API-ноды (WanTextToImageApi и т.п.), где промпт не
-    # первый/второй виджет. Пробуем её первой, статический список — запасной путь.
+    # set_positive_prompt/set_negative_prompt разрешают роль узла (positive vs
+    # negative) по графу связей — это НАДЁЖНЕЕ, пробуем их первыми. Живая схема
+    # узла (/object_info) знает только имя виджета ("prompt"/"text"), но ничего
+    # не знает о графе связей — для обычных CLIPTextEncode-пайплайнов она взяла
+    # бы первый попавшийся по порядку в файле текстовый узел, вне зависимости от
+    # того, positive он или negative (именно так когда-то выглядел уже
+    # исправленный баг). Схема — запасной путь ТОЛЬКО для узлов вне статического
+    # списка типов и без прямых CONDITIONING-связей (например API-ноды вроде
+    # WanTextToImageApi, где нет отдельного узла-сэмплера).
     comfy_reachable = client.health_check()
 
     prompt_text = ui.ask_prompt()
-    prompt_applied = (
+    prompt_applied = set_positive_prompt(workflow, prompt_text) or (
         comfy_reachable and set_positive_prompt_via_schema(workflow, prompt_text, client)
-    ) or set_positive_prompt(workflow, prompt_text)
+    )
     if not prompt_applied:
         console.print(
             "[yellow]Не удалось автоматически подставить промпт в этот шаблон — "
@@ -105,9 +111,9 @@ def run(force_refresh: bool = False) -> None:
     if ui.ask_extra_params_wanted():
         negative = ui.ask_negative_prompt()
         if negative:
-            negative_applied = (
+            negative_applied = set_negative_prompt(workflow, negative) or (
                 comfy_reachable and set_negative_prompt_via_schema(workflow, negative, client)
-            ) or set_negative_prompt(workflow, negative)
+            )
             if not negative_applied:
                 console.print("[yellow]Не удалось применить negative prompt — узел не найден в этом шаблоне.[/yellow]")
         resolution = ui.ask_resolution()
