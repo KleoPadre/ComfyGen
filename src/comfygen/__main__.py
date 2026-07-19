@@ -9,6 +9,7 @@ from rich.console import Console
 from comfygen.catalog import fetch_remote_template, filter_by_generation_type, get_index, parse_templates
 from comfygen.comfy_client import ComfyClient
 from comfygen.config import CACHE_PATH, load_config
+from comfygen.device_compatibility import filter_device_incompatible
 from comfygen.device_detect import DeviceDetectionError, UnsupportedPlatformError, detect_hybrid, detect_via_api, detect_via_os
 from comfygen.models import DeviceInfo, VramTier
 from comfygen.vram_filter import classify_templates
@@ -68,6 +69,7 @@ def run(force_refresh: bool = False) -> None:
 
         templates = parse_templates(raw_index)
         candidates = filter_by_generation_type(templates, gen_type)
+        candidates = filter_device_incompatible(candidates, device)
         tiers = classify_templates(candidates, device, config.vram_safe_factor, config.vram_warning_factor)
 
         ui.render_templates_table(tiers)
