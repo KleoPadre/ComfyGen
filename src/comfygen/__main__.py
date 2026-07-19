@@ -15,7 +15,9 @@ from comfygen.vram_filter import classify_templates
 from comfygen.workflow_editor import (
     set_image_input,
     set_negative_prompt,
+    set_negative_prompt_via_schema,
     set_positive_prompt,
+    set_positive_prompt_via_schema,
     set_resolution,
     set_seed,
     set_steps,
@@ -83,8 +85,16 @@ def run(force_refresh: bool = False) -> None:
             console.print(f"[red]Не удалось загрузить файл шаблона {template.name}: {exc}[/red]")
             return
 
+    # Живая схема узла (/object_info) надёжнее статического списка типов — работает
+    # для любых узлов, включая API-ноды (WanTextToImageApi и т.п.), где промпт не
+    # первый/второй виджет. Пробуем её первой, статический список — запасной путь.
+    comfy_reachable = client.health_check()
+
     prompt_text = ui.ask_prompt()
-    if not set_positive_prompt(workflow, prompt_text):
+    prompt_applied = (
+        comfy_reachable and set_positive_prompt_via_schema(workflow, prompt_text, client)
+    ) or set_positive_prompt(workflow, prompt_text)
+    if not prompt_applied:
         console.print(
             "[yellow]Не удалось автоматически подставить промпт в этот шаблон — "
             "впишите его вручную в узле CLIP/текстового энкодера прямо в ComfyUI.[/yellow]"
@@ -93,7 +103,10 @@ def run(force_refresh: bool = False) -> None:
     if ui.ask_extra_params_wanted():
         negative = ui.ask_negative_prompt()
         if negative:
-            if not set_negative_prompt(workflow, negative):
+            negative_applied = (
+                comfy_reachable and set_negative_prompt_via_schema(workflow, negative, client)
+            ) or set_negative_prompt(workflow, negative)
+            if not negative_applied:
                 console.print("[yellow]Не удалось применить negative prompt — узел не найден в этом шаблоне.[/yellow]")
         resolution = ui.ask_resolution()
         if resolution:

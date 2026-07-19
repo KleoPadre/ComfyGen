@@ -1,6 +1,6 @@
 [project]
 name = "comfygen"
-version = "0.2.1"
+version = "0.3.0"
 description = "CLI-помощник для генерации в ComfyUI"
 authors = [
     { name = "Levon Osipov", email = "osipoff.levon@gmail.com" }

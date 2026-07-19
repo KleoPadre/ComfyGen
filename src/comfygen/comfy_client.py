@@ -24,6 +24,11 @@ class ComfyClient:
         response.raise_for_status()
         return response.json()
 
+    def object_info(self, node_type: str) -> dict:
+        response = self._client.get(f"{self.base_url}/object_info/{node_type}", timeout=10.0)
+        response.raise_for_status()
+        return response.json().get(node_type, {})
+
     def upload_image(self, file_path: Path) -> str:
         with file_path.open("rb") as f:
             response = self._client.post(

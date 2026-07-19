@@ -32,6 +32,29 @@ def test_system_stats_returns_parsed_json():
 
 
 @respx.mock
+def test_object_info_returns_node_schema():
+    payload = {
+        "WanTextToImageApi": {
+            "input": {"required": {"prompt": ["STRING", {"multiline": True}]}},
+            "input_order": {"required": ["prompt"], "optional": []},
+        }
+    }
+    respx.get(f"{BASE_URL}/object_info/WanTextToImageApi").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    client = ComfyClient(BASE_URL)
+    assert client.object_info("WanTextToImageApi") == payload["WanTextToImageApi"]
+
+
+@respx.mock
+def test_object_info_raises_on_http_error():
+    respx.get(f"{BASE_URL}/object_info/UnknownType").mock(return_value=httpx.Response(404))
+    client = ComfyClient(BASE_URL)
+    with pytest.raises(httpx.HTTPStatusError):
+        client.object_info("UnknownType")
+
+
+@respx.mock
 def test_upload_image_returns_server_filename(tmp_path):
     image_path = tmp_path / "photo.png"
     image_path.write_bytes(b"fake-image-bytes")

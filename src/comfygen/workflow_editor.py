@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Protocol
+
+from comfygen import node_schema
 
 POSITIVE_PROMPT_NODE_TYPES = {
     "CLIPTextEncode",
@@ -100,3 +103,45 @@ def set_image_input(workflow: dict, filename: str) -> bool:
         return False
     widgets_values[0] = filename
     return True
+
+
+class SupportsObjectInfo(Protocol):
+    def object_info(self, node_type: str) -> dict: ...
+
+
+def _set_text_via_schema(workflow: dict, text: str, client: SupportsObjectInfo, aliases: set[str]) -> bool:
+    """Найти узел, чья ЖИВАЯ схема (/object_info) объявляет multiline-текстовый вход
+    с одним из имён-алиасов, и подставить туда текст.
+
+    В отличие от `set_positive_prompt`/`set_negative_prompt` (фиксированный список
+    типов узлов, индекс 0/1), этот путь работает для ЛЮБОГО типа узла — включая
+    API-ноды (WanTextToImageApi и т.п.), где промпт не первый/второй виджет и тип
+    узла не входит и не может заранее входить в статический список.
+    """
+    for node in iter_all_nodes(workflow):
+        node_type = node.get("type")
+        if not isinstance(node_type, str):
+            continue
+        try:
+            info = client.object_info(node_type)
+        except Exception:
+            continue
+        if not info:
+            continue
+        index = node_schema.find_widget_index(info, node, aliases, require_multiline=True)
+        if index is None:
+            continue
+        widgets_values = node.get("widgets_values") or []
+        if index >= len(widgets_values):
+            continue
+        widgets_values[index] = text
+        return True
+    return False
+
+
+def set_positive_prompt_via_schema(workflow: dict, text: str, client: SupportsObjectInfo) -> bool:
+    return _set_text_via_schema(workflow, text, client, node_schema.PROMPT_NAME_ALIASES)
+
+
+def set_negative_prompt_via_schema(workflow: dict, text: str, client: SupportsObjectInfo) -> bool:
+    return _set_text_via_schema(workflow, text, client, node_schema.NEGATIVE_NAME_ALIASES)

@@ -4,7 +4,9 @@ from comfygen.workflow_editor import (
     iter_all_nodes,
     set_image_input,
     set_negative_prompt,
+    set_negative_prompt_via_schema,
     set_positive_prompt,
+    set_positive_prompt_via_schema,
     set_resolution,
     set_seed,
     set_steps,
@@ -139,3 +141,85 @@ def test_set_negative_prompt_returns_false_when_widgets_values_too_short():
         "definitions": {"subgraphs": []},
     }
     assert set_negative_prompt(workflow, "blurry") is False
+
+
+WAN_TEXT_TO_IMAGE_API_INFO = {
+    "input": {
+        "required": {
+            "model": ["COMBO", {"options": ["wan2.5-t2i-preview"]}],
+            "prompt": ["STRING", {"default": "", "multiline": True}],
+        },
+        "optional": {
+            "negative_prompt": ["STRING", {"default": "", "multiline": True}],
+            "width": ["INT", {"default": 1024}],
+        },
+    },
+    "input_order": {
+        "required": ["model", "prompt"],
+        "optional": ["negative_prompt", "width"],
+    },
+}
+
+WAN_API_NODE_WORKFLOW = {
+    "nodes": [
+        {
+            "id": 12,
+            "type": "WanTextToImageApi",
+            "inputs": [],
+            "widgets_values": ["wan2.5-t2i-preview", "old prompt", "", 1024],
+        },
+    ],
+    "definitions": {"subgraphs": []},
+}
+
+
+class FakeObjectInfoClient:
+    """Заглушка client.object_info(node_type) для тестов без реальной сети."""
+
+    def __init__(self, info_by_type: dict[str, dict]):
+        self._info_by_type = info_by_type
+
+    def object_info(self, node_type: str) -> dict:
+        if node_type not in self._info_by_type:
+            raise KeyError(node_type)
+        return self._info_by_type[node_type]
+
+
+def test_set_positive_prompt_via_schema_patches_named_widget():
+    workflow = copy.deepcopy(WAN_API_NODE_WORKFLOW)
+    client = FakeObjectInfoClient({"WanTextToImageApi": WAN_TEXT_TO_IMAGE_API_INFO})
+    assert set_positive_prompt_via_schema(workflow, "new prompt", client) is True
+    assert workflow["nodes"][0]["widgets_values"][1] == "new prompt"
+    assert workflow["nodes"][0]["widgets_values"][0] == "wan2.5-t2i-preview"
+
+
+def test_set_negative_prompt_via_schema_patches_named_widget():
+    workflow = copy.deepcopy(WAN_API_NODE_WORKFLOW)
+    client = FakeObjectInfoClient({"WanTextToImageApi": WAN_TEXT_TO_IMAGE_API_INFO})
+    assert set_negative_prompt_via_schema(workflow, "blurry", client) is True
+    assert workflow["nodes"][0]["widgets_values"][2] == "blurry"
+
+
+def test_set_positive_prompt_via_schema_returns_false_when_object_info_unavailable():
+    workflow = copy.deepcopy(WAN_API_NODE_WORKFLOW)
+    client = FakeObjectInfoClient({})
+    assert set_positive_prompt_via_schema(workflow, "new prompt", client) is False
+    assert workflow["nodes"][0]["widgets_values"][1] == "old prompt"
+
+
+def test_set_positive_prompt_via_schema_works_inside_subgraph():
+    workflow = {
+        "nodes": [{"id": 57, "type": "uuid-subgraph", "widgets_values": []}],
+        "definitions": {
+            "subgraphs": [
+                {
+                    "id": "uuid-subgraph",
+                    "nodes": [copy.deepcopy(WAN_API_NODE_WORKFLOW["nodes"][0])],
+                }
+            ]
+        },
+    }
+    client = FakeObjectInfoClient({"WanTextToImageApi": WAN_TEXT_TO_IMAGE_API_INFO})
+    assert set_positive_prompt_via_schema(workflow, "new prompt", client) is True
+    subgraph_node = workflow["definitions"]["subgraphs"][0]["nodes"][0]
+    assert subgraph_node["widgets_values"][1] == "new prompt"
